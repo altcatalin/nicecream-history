@@ -15,7 +15,10 @@ services:
     ports:
         - "${REDIS_PORT}:6379"
   api:
-    build: .
+    build:
+      context: .
+      args:
+        PIPENV_OPTIONS: --system --deploy --dev
     image: ${API_DOCKER_IMAGE_NAME}
     environment:
       API_DEBUG: ${API_DEBUG}
