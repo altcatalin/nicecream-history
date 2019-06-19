@@ -1,0 +1,18 @@
+dist: xenial
+
+services:
+  - docker
+
+install: true
+
+before_script:
+  - cp .env.sample .env
+  - docker-compose up -d postgres redis
+  - docker-compose build api
+  - docker-compose run migrations
+
+script:
+  - docker-compose run api pytest tests/integration
+
+after_script:
+  - docker-compose down -v
