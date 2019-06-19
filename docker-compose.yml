@@ -1,0 +1,114 @@
+version: "3"
+services:
+  postgres:
+    image: postgres:10.6-alpine
+    environment:
+        POSTGRES_DB: ${PGDATABASE}
+        POSTGRES_USER: ${PGUSER}
+        POSTGRES_PASSWORD: ${PGPASSWORD}
+    ports:
+        - "${PGPORT}:5432"
+    volumes:
+        - postgres_data:/var/lib/postgresql/data
+  redis:
+    image: redis:5.0-alpine
+    ports:
+        - "${REDIS_PORT}:6379"
+  api:
+    build: .
+    image: ${API_DOCKER_IMAGE_NAME}
+    environment:
+      API_DEBUG: ${API_DEBUG}
+      API_ENVIRONMENT: ${API_ENVIRONMENT}
+      API_CORS: ${API_CORS}
+      API_OPENAPI_SERVER_URL: ${API_OPENAPI_SERVER_URL}
+      PGHOST: ${PGHOST}
+      PGPORT: ${PGPORT}
+      PGDATABASE: ${PGDATABASE}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_DB: ${REDIS_DB}
+      WAIT_COMMAND: "psql -q -c 'select count(*) from alembic_version'"
+      WAIT_START_CMD: "gunicorn api.api:build --bind 0.0.0.0:8080 --worker-class aiohttp.GunicornWebWorker --access-logfile=- --error-logfile=- --reload"
+      WAIT_SLEEP: 10
+      WAIT_LOOPS: 6
+    ports:
+      - "${API_PORT_PUBLIC}:8080"
+    volumes:
+      - ./api:/usr/src/nicecream-history/api
+      - ./crawler:/usr/src/nicecream-history/crawler
+      - ./alembic:/usr/src/nicecream-history/alembic
+      - ./wait.sh:/wait.sh
+    depends_on:
+      - postgres
+      - redis
+    command: ["sh", "-c", "/wait.sh"]
+  crawler:
+    image: ${API_DOCKER_IMAGE_NAME}
+    environment:
+      API_DEBUG: ${API_DEBUG}
+      API_ENVIRONMENT: ${API_ENVIRONMENT}
+      API_CORS: ${API_CORS}
+      API_OPENAPI_SERVER_URL: ${API_OPENAPI_SERVER_URL}
+      PGHOST: ${PGHOST}
+      PGPORT: ${PGPORT}
+      PGDATABASE: ${PGDATABASE}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_DB: ${REDIS_DB}
+      WAIT_COMMAND: "psql -q -c 'select count(*) from alembic_version'"
+      WAIT_START_CMD: "python -m crawler"
+      WAIT_SLEEP: 10
+      WAIT_LOOPS: 6
+    volumes:
+      - ./api:/usr/src/nicecream-history/api
+      - ./crawler:/usr/src/nicecream-history/crawler
+      - ./alembic:/usr/src/nicecream-history/alembic
+      - ./wait.sh:/wait.sh
+    depends_on:
+      - postgres
+      - redis
+    command: ["sh", "-c", "/wait.sh"]
+  migrations:
+    image: ${API_DOCKER_IMAGE_NAME}
+    environment:
+      API_DEBUG: ${API_DEBUG}
+      API_ENVIRONMENT: ${API_ENVIRONMENT}
+      API_CORS: ${API_CORS}
+      API_OPENAPI_SERVER_URL: ${API_OPENAPI_SERVER_URL}
+      PGHOST: ${PGHOST}
+      PGPORT: ${PGPORT}
+      PGDATABASE: ${PGDATABASE}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_DB: ${REDIS_DB}
+      WAIT_COMMAND: "nc -z ${PGHOST} ${PGPORT}"
+      WAIT_START_CMD: "alembic upgrade head"
+      WAIT_SLEEP: 10
+      WAIT_LOOPS: 6
+    volumes:
+      - ./api:/usr/src/nicecream-history/api
+      - ./crawler:/usr/src/nicecream-history/crawler
+      - ./alembic:/usr/src/nicecream-history/alembic
+      - ./wait.sh:/wait.sh
+    depends_on:
+      - postgres
+      - redis
+    working_dir: /usr/src/nicecream-history/alembic
+    command: ["sh", "-c", "/wait.sh"]
+  swagger_ui:
+    image: swaggerapi/swagger-ui
+    ports:
+      - "${SWAGGER_PORT_PUBLIC}:8080"
+    environment:
+      API_URL: ${SWAGGER_OPENAPI_URL}
+    depends_on:
+      - api
+volumes:
+  postgres_data:
