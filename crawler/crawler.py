@@ -1,4 +1,5 @@
 import asyncio
+import html
 import logging
 import re
 from http import HTTPStatus
@@ -16,6 +17,8 @@ from api.log import configure_logging
 def extract(content: str):
     match = re.findall(r'\({\"songtitle\":\"(.+)\"}\)', content)
     song_title = re.sub('<.*?>', '', match[0])
+    song_title = html.unescape(song_title)
+    song_title = song_title.encode("ascii", "strict").decode("unicode-escape")
     return song_title
 
 
