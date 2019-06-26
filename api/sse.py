@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from _weakrefset import WeakSet
 from typing import Optional, Dict
 
@@ -8,11 +7,12 @@ from aiohttp.typedefs import LooseHeaders
 from aiohttp_sse import EventSourceResponse, _ContextManager
 
 from api.cors import generate_cors_headers
+from api.logger import get_logger
 from api.schemas import HistorySchema
 from api.settings import settings
 
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 class SSEResponse(EventSourceResponse):
@@ -54,12 +54,12 @@ async def create_sse_redis_subscriber(app: web.Application) -> None:
 
 
 async def cancel_sse_redis_subscriber(app: web.Application) -> None:
-    try:
-        if not app["sse_subscriber"].cancelled():
+    if not app["sse_subscriber"].cancelled():
+        try:
             app["sse_subscriber"].cancel()
             await app["sse_subscriber"]
-    except asyncio.CancelledError:
-        pass
+        except asyncio.CancelledError:
+            pass
 
 
 async def close_sse_streams(app: web.Application) -> None:
@@ -83,7 +83,7 @@ async def sse_redis_subscriber(app: web.Application) -> None:
             fs = []
 
             for stream in app['sse_streams']:
-                fs.append(stream.send(message,
+                fs.append(stream.send(message.id,
                                       id=history["id"],
                                       event=settings["redis"]["channel"],
                                       retry=settings["sse"]["retry"]))
@@ -92,8 +92,7 @@ async def sse_redis_subscriber(app: web.Application) -> None:
     except asyncio.CancelledError:
         pass
     except Exception as e:
-        log.exception(f"Fatal error in Redis subscriber", exc_info=True)
+        log.exception("Fatal error", exc_info=True)
     finally:
-        await app["redis"].unsubscribe(channel.name)
         await close_sse_streams(app)
         await cancel_sse_redis_subscriber(app)

@@ -11,7 +11,7 @@ from databases import Database
 
 from api.database import fetch_channels_extra, fetch_song_by_title, insert_song, insert_history_item, fetch_history_item
 from api.settings import settings
-from api.log import configure_logging
+from api.logger import setup_logging
 
 
 def extract(content: str):
@@ -38,7 +38,7 @@ async def fetch_channels_content(channels: List[Dict]):
 
 
 async def worker(forever: bool = True):
-    await configure_logging()
+    setup_logging()
     log = logging.getLogger(__name__)
 
     redis = await create_redis(settings["redis"]["url"])
@@ -54,7 +54,7 @@ async def worker(forever: bool = True):
         for channel, response_status_code, response_body in responses:
             if not response_status_code == HTTPStatus.OK:
                 sleep_interval = settings["crawler"]["backoff_interval"]
-                log.warning(f"channel_id={channel['id']}, status_code={response_status_code}")
+                log.warning(f"Cannot process response for channel_id= {channel['id']} (status_code={response_status_code})")
                 continue
 
             curr_song_title = extract(response_body.decode("utf8"))
@@ -72,7 +72,7 @@ async def worker(forever: bool = True):
                 history_item = await fetch_history_item(database, history_item_id)
                 redis.publish_json(settings["redis"]["channel"], history_item)
 
-            log.info(f"channel_id={channel['id']}, status_code={response_status_code}, history_item_id={history_item_id}")
+            log.info(f"{('History updated' if history_item_id > 0 else 'No update')} for channel_id={channel['id']}")
 
         if not forever:
             break

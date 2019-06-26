@@ -3,8 +3,12 @@ from typing import Union
 from aiohttp import web, hdrs
 
 from api.database import fetch_channels, fetch_history
+from api.logger import get_logger
 from api.schemas import HistoryRequestFiltersSchema, request_path_schema
 from api.sse import sse_response
+
+
+log = get_logger(__name__)
 
 
 async def get_channels_handler(request: web.Request) -> web.Response:
@@ -82,12 +86,15 @@ async def get_history_handler(request: web.Request) -> Union[web.Response, web.S
         if request.app["sse_subscriber"].cancelled():
             raise web.HTTPInternalServerError()
 
+        log.info("Opening a SSE connection")
+
         sse_stream = await sse_response(request)
         request.app["sse_streams"].add(sse_stream)
 
         try:
             await sse_stream.wait()
         finally:
+            log.info("Closing a SSE connection")
             request.app["sse_streams"].discard(sse_stream)
 
         return sse_stream

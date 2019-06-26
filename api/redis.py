@@ -1,7 +1,7 @@
 import aioredis
 from aiohttp import web
 
-from api import settings
+from api.settings import settings
 
 
 async def create_redis_connection_pool(app: web.Application) -> None:

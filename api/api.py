@@ -3,7 +3,7 @@ from aiohttp import web
 from api.cors import cors_middleware
 from api.database import create_postgres_connection_pool, close_postgres_connection_pool
 from api.exceptions import exception_middleware
-from api.log import configure_logging
+from api.logger import setup_logging
 from api.openapi import generate_openapi_spec, get_openapi_handler
 from api.redis import create_redis_connection_pool, close_redis_connection_pool
 from api.schemas import request_path_validation_middleware
@@ -13,6 +13,8 @@ from api.views import get_channels_handler, get_history_handler
 
 
 async def build() -> web.Application:
+    setup_logging()
+
     app = web.Application()
     app["settings"] = settings
 
@@ -27,7 +29,6 @@ async def build() -> web.Application:
     app.middlewares.append(cors_middleware)
     app.middlewares.append(request_path_validation_middleware)
 
-    app.on_startup.append(configure_logging)
     app.on_startup.append(create_postgres_connection_pool)
     app.on_startup.append(create_redis_connection_pool)
     app.on_startup.append(create_sse_redis_subscriber)
