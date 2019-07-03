@@ -44,8 +44,6 @@ async def get_history_handler(request: web.Request) -> Union[web.Response, web.S
         summary: Get history
         description: |
             Retrieve max 100 records from history.
-
-            Receive real-time notifications over a [SSE](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events) connection.
         parameters:
             -
                 name: channel_id
@@ -69,6 +67,47 @@ async def get_history_handler(request: web.Request) -> Union[web.Response, web.S
                         schema:
                             type: array
                             items: HistorySchema
+            422:
+                description: Validation Error
+                content:
+                    application/json:
+                        schema: HTTPValidationErrorSchema
+    """
+    database = request.app["database"]
+    data = await fetch_history(database, request["parameters"])
+
+    return web.json_response(data)
+
+
+@request_path_schema(HistoryRequestFiltersSchema())
+async def get_history_events_handler(request: web.Request) -> Union[web.Response, web.StreamResponse]:
+    """Get history
+    ---
+    get:
+        tags:
+            - history
+        summary: Get history events
+        description: |
+            Receive real-time notifications over a [SSE](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events) connection.
+        parameters:
+            -
+                name: channel_id
+                in: query
+                required: false
+                description: Retrieve records filtered by channel ID, default = 0
+                schema:
+                    type: integer
+            -
+                name: offset
+                in: query
+                required: false
+                description: Retrieve records starting with the offset value, default = 0
+                schema:
+                    type: integer
+        responses:
+            200:
+                description: Successful Response
+                content:
                     text/event-stream:
                         schema: HistorySchema
             422:
@@ -77,29 +116,20 @@ async def get_history_handler(request: web.Request) -> Union[web.Response, web.S
                     application/json:
                         schema: HTTPValidationErrorSchema
     """
-    accept_header = request.headers.get(hdrs.ACCEPT)
 
-    # return a SSE response
-    if accept_header == "text/event-stream":
+    # reject SSE connection if sse_subscriber background task is cancelled
+    if request.app["sse_subscriber"].cancelled():
+        raise web.HTTPInternalServerError()
 
-        # reject SSE connection if sse_subscriber background task is cancelled
-        if request.app["sse_subscriber"].cancelled():
-            raise web.HTTPInternalServerError()
+    log.info("Opening a SSE connection")
 
-        log.info("Opening a SSE connection")
+    sse_stream = await sse_response(request)
+    request.app["sse_streams"].add(sse_stream)
 
-        sse_stream = await sse_response(request)
-        request.app["sse_streams"].add(sse_stream)
+    try:
+        await sse_stream.wait()
+    finally:
+        log.info("Closing a SSE connection")
+        request.app["sse_streams"].discard(sse_stream)
 
-        try:
-            await sse_stream.wait()
-        finally:
-            log.info("Closing a SSE connection")
-            request.app["sse_streams"].discard(sse_stream)
-
-        return sse_stream
-
-    database = request.app["database"]
-    data = await fetch_history(database, request["parameters"])
-
-    return web.json_response(data)
+    return sse_stream
