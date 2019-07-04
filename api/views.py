@@ -109,7 +109,9 @@ async def get_history_events_handler(request: web.Request) -> Union[web.Response
                 description: Successful Response
                 content:
                     text/event-stream:
-                        schema: HistorySchema
+                        schema:
+                            type: string
+                            example: 'id: 0\n\nevent: history\n\ndata: {\"song_id\": 0, \"id\": 0, \"channel_id\": 0, \"song_title\": \"string\", \"created_at\": \"2019-07-03T15:32:02.632513+00:00\"}\n\nretry: 0\n\n'
             422:
                 description: Validation Error
                 content:
