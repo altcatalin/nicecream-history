@@ -9,7 +9,7 @@ from api.redis import create_redis_connection_pool, close_redis_connection_pool
 from api.schemas import request_path_validation_middleware
 from api.settings import settings
 from api.sse import create_sse_redis_subscriber, cancel_sse_redis_subscriber, close_sse_streams
-from api.views import get_channels_handler, get_history_handler
+from api.views import get_channels_handler, get_history_handler, get_history_events_handler
 
 
 async def build() -> web.Application:
@@ -23,6 +23,7 @@ async def build() -> web.Application:
 
     app.router.add_get("/channels", get_channels_handler, name="channels")
     app.router.add_get("/history", get_history_handler, name="history")
+    app.router.add_get("/history/events", get_history_events_handler, name="history_events")
     app.router.add_get(openapi_route_url, get_openapi_handler, name=openapi_route_name)
 
     app.middlewares.append(exception_middleware)
