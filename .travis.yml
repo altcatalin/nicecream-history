@@ -6,6 +6,7 @@ services:
 install: true
 
 before_script:
+  - export API_COOKIE_SESSION_SECRET_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
   - cp .env.sample .env
   - docker-compose up -d postgres redis
   - docker-compose build api
