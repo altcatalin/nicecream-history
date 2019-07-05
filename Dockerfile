@@ -5,7 +5,7 @@ ENV ROOT=/usr/src/nicecream-history
 ENV PYTHONPATH="$PYTHONPATH:$ROOT"
 ARG PIPENV_OPTIONS="--system --deploy"
 
-RUN apk --no-cache add build-base postgresql-dev postgresql-client
+RUN apk --no-cache add build-base postgresql-dev postgresql-client libressl-dev musl-dev libffi-dev
 
 COPY Pipfile Pipfile
 COPY Pipfile.lock Pipfile.lock
