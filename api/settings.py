@@ -49,6 +49,25 @@ settings = {
     "server": {
         "host": env("API_SERVER_HOST", default="127.0.0.1"),
         "port": env("API_SERVER_PORT", cast=int, default=8080)
+    },
+    "spa": {
+        "url": env("SPA_URL", default=None)
+    },
+    "session": {
+        "cookie": {
+            "secret_key": env("API_COOKIE_SESSION_SECRET_KEY", default=None),
+            "cookie_name": "nicecream_history",
+            "secure": env("API_COOKIE_SESSION_SECURE", cast=bool, default=True)
+        }
+    },
+    "oauth2": {
+        "google": {
+            "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+            "token_endpoint": "https://oauth2.googleapis.com/token",
+            "client_id": env("API_GOOGLE_CLIENT_ID", default=None),
+            "client_secret": env("API_GOOGLE_CLIENT_SECRET", default=None),
+            "redirect_url": env("API_GOOGLE_REDIRECT_URL", default=None)
+        }
     }
 }
 
@@ -60,8 +79,12 @@ assert settings["postgres"]["database"] is not None
 assert settings["redis"]["host"] is not None
 assert settings["redis"]["port"] is not None
 assert settings["redis"]["database"] is not None
+assert settings["spa"]["url"] is not None
+assert settings["session"]["cookie"]["secret_key"] is not None
+assert settings["oauth2"]["google"]["client_id"] is not None
+assert settings["oauth2"]["google"]["client_secret"] is not None
+assert settings["oauth2"]["google"]["redirect_url"] is not None
 
-settings["postgres"]["url"] = "postgresql://{user}:{password}@{host}:{port}/{database}".format(
-    **settings["postgres"])
-settings["redis"]["url"] = "redis://{host}:{port}?db={database}".format(
-    **settings["redis"])
+
+settings["postgres"]["url"] = "postgresql://{user}:{password}@{host}:{port}/{database}".format(**settings["postgres"])
+settings["redis"]["url"] = "redis://{host}:{port}?db={database}".format(**settings["redis"])
