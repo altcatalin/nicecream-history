@@ -69,41 +69,33 @@ class HTTPClientErrorSchema(Schema):
 
 
 class HTTPValidationErrorSchema(Schema):
-    detail = fields.Dict(keys=fields.Str(), values=fields.List(fields.Str()))
+    detail = fields.Dict(keys=fields.Str(), values=fields.List(fields.Dict()))
 
 
-def request_path_schema(schema: Schema) -> Callable:
-    def wrapper(handler) -> Callable:
-        if not hasattr(handler, "__path_schema__"):
-            handler.__path_schema__ = schema
-        return handler
-    return wrapper
+def request_validation(query_schema: Schema = None, body_schema: Schema = None) -> Callable:
+    def handler_wrapper(handler: Callable) -> Callable:
+        async def request_wrapper(request: web.Request, **kwargs) -> Union[Callable, web.Response]:
+            errors = {}
 
+            if query_schema:
+                try:
+                    query = query_schema.load(dict(request.query))
+                    request["query"] = query
+                except ValidationError as e:
+                    errors["path"] = e.messages
 
-@middleware
-async def request_path_validation_middleware(request: web.Request, handler: Callable) -> web.Response:
-    request_handler = request.match_info.handler
+            if body_schema:
+                try:
+                    body = body_schema.loads(await request.json())
+                    request["body"] = body
+                except ValidationError as e:
+                    errors["body"] = e.messages
 
-    if not hasattr(request_handler, "__path_schema__"):
-        if not issubclass_py37(request_handler, web.View):
-            return await handler(request)
+            if errors:
+                validation_error_schema = HTTPValidationErrorSchema()
+                data = validation_error_schema.dump({"detail": errors})
+                raise web.HTTPUnprocessableEntity(text=json.dumps(data), content_type="application/json")
 
-        class_handler = getattr(request_handler, request.method.lower(), None)
-
-        if class_handler is None or not hasattr(class_handler, "__path_schema__"):
-            return await handler(request)
-
-        schema = class_handler.__path_schema__
-    else:
-        schema = request_handler.__path_schema__
-
-    try:
-        parameters = schema.load(dict(request.query))
-        request["parameters"] = parameters
-    except ValidationError as e:
-        validation_error_schema = HTTPValidationErrorSchema()
-        validation_errors = validation_error_schema.dump({"detail": e.messages})
-        raise web.HTTPUnprocessableEntity(text=json.dumps(validation_errors), content_type="application/json")
-
-    response = await handler(request)
-    return response
+            return await handler(request, **kwargs)
+        return request_wrapper
+    return handler_wrapper
