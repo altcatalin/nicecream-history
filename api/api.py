@@ -8,7 +8,6 @@ from api.exceptions import exception_middleware
 from api.logger import setup_logging
 from api.openapi import generate_openapi_spec, get_openapi_handler
 from api.redis import create_redis_connection_pool, close_redis_connection_pool
-from api.schemas import request_path_validation_middleware
 from api.settings import settings
 from api.sse import create_sse_redis_subscriber, cancel_sse_redis_subscriber, close_sse_streams
 from api.views import *
@@ -34,7 +33,6 @@ async def build() -> web.Application:
     app.middlewares.append(aiohttp_session.session_middleware(cookie_storage))
     app.middlewares.append(exception_middleware)
     app.middlewares.append(cors_middleware)
-    app.middlewares.append(request_path_validation_middleware)
 
     app.on_startup.append(create_postgres_connection_pool)
     app.on_startup.append(create_redis_connection_pool)
