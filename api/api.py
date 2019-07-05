@@ -1,4 +1,6 @@
+import aiohttp_session
 from aiohttp import web
+from aiohttp_session.cookie_storage import EncryptedCookieStorage
 
 from api.cors import cors_middleware
 from api.database import create_postgres_connection_pool, close_postgres_connection_pool
@@ -9,23 +11,27 @@ from api.redis import create_redis_connection_pool, close_redis_connection_pool
 from api.schemas import request_path_validation_middleware
 from api.settings import settings
 from api.sse import create_sse_redis_subscriber, cancel_sse_redis_subscriber, close_sse_streams
-from api.views import get_channels_handler, get_history_handler, get_history_events_handler
+from api.views import *
 
 
 async def build() -> web.Application:
     setup_logging()
 
+    cookie_storage = EncryptedCookieStorage(**settings["session"]["cookie"])
+    openapi_route = settings["openapi"]["route"]
+
     app = web.Application()
     app["settings"] = settings
-
-    openapi_route_url = app["settings"]["openapi"]["route"]["url"]
-    openapi_route_name = app["settings"]["openapi"]["route"]["name"]
 
     app.router.add_get("/channels", get_channels_handler, name="channels")
     app.router.add_get("/history", get_history_handler, name="history")
     app.router.add_get("/history/events", get_history_events_handler, name="history_events")
-    app.router.add_get(openapi_route_url, get_openapi_handler, name=openapi_route_name)
+    app.router.add_get("/user", get_user_handler, name="user")
+    app.router.add_get("/user/google", get_user_google_handler, name="user_google")
+    app.router.add_get("/user/google/callback", get_user_google_callback_handler, name="user_google_callback")
+    app.router.add_get(openapi_route["url"], get_openapi_handler, name=openapi_route["name"])
 
+    app.middlewares.append(aiohttp_session.session_middleware(cookie_storage))
     app.middlewares.append(exception_middleware)
     app.middlewares.append(cors_middleware)
     app.middlewares.append(request_path_validation_middleware)

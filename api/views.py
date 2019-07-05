@@ -1,10 +1,19 @@
+import base64
+import json
+from http import HTTPStatus
+
+import aiohttp
 from typing import Union
 
-from aiohttp import web, hdrs
+from aiohttp import web
+from aiohttp.web_exceptions import HTTPBadRequest
+from aiohttp_session import get_session
 
+from api.auth import private_path, generate_google_authorization_url, exchange_google_code_for_tokens, get_user_info
 from api.database import fetch_channels, fetch_history
 from api.logger import get_logger
-from api.schemas import HistoryRequestFiltersSchema, request_path_schema
+from api.schemas import HistoryRequestFiltersSchema, request_path_schema, UserSchema
+from api.settings import settings
 from api.sse import sse_response
 
 
@@ -135,3 +144,64 @@ async def get_history_events_handler(request: web.Request) -> Union[web.Response
         request.app["sse_streams"].discard(sse_stream)
 
     return sse_stream
+
+
+@private_path
+async def get_user_handler(request: web.Request) -> web.Response:
+    """Get signed in user info
+    ---
+    get:
+        tags:
+            - user
+        summary: Get signed in user info
+        responses:
+            200:
+                description: Successful Response
+                content:
+                    application/json:
+                        schema:
+                            type: array
+                            items: ChannelSchema
+    """
+    data = await get_user_info(request)
+    return web.json_response(data)
+
+
+async def get_user_google_handler(request: web.Request) -> web.Response:
+    """Sign in with Google
+    ---
+    get:
+        tags:
+            - user
+        summary: Sign in with Google
+        description: |
+            Redirect to this endpoint to initiate [OAuth 2.0 Authorization Code Grant](https://developers.google.com/identity/protocols/OAuth2WebServer)
+        responses:
+            302:
+                description: Successful Response
+                headers:
+                    Location:
+                        type: "string"
+    """
+    authorization_url = await generate_google_authorization_url(request)
+    return web.HTTPFound(authorization_url)
+
+
+async def get_user_google_callback_handler(request: web.Request) -> web.Response:
+    """Google OAuth 2.0 Authorization Code Grant callback endpoint
+    ---
+    get:
+        tags:
+            - user
+        summary: Google OAuth 2.0 Authorization Code Grant callback endpoint
+        description: |
+            This endpoint must be present in the Google client's authorized redirect URIs list
+        responses:
+            302:
+                description: Successful Response
+                headers:
+                    Location:
+                        type: "string"
+    """
+    await exchange_google_code_for_tokens(request)
+    return web.HTTPFound(settings["spa"]["url"])

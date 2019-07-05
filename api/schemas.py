@@ -57,6 +57,13 @@ class SSEMessageSchema(Schema):
     retry = fields.Integer(required=True)
 
 
+class UserSchema(Schema):
+    sub = fields.Integer(required=True)
+    picture = fields.Url(required=True)
+    given_name = fields.Str(required=True)
+    family_name = fields.Str(required=True)
+
+
 class HTTPClientErrorSchema(Schema):
     detail = fields.Str(required=True)
 
