@@ -24,6 +24,7 @@ aioredis = "==1.2.0"
 aiohttp-sse = "==2.0.0"
 aiohttp-session = "==2.7.0"
 cryptography = "==2.7"
+aiohttp-jinja2 = "==1.1.1"
 
 [requires]
 python_version = "3.7"

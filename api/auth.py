@@ -1,29 +1,30 @@
 import base64
 import json
+from functools import wraps
 from http import HTTPStatus
 
 import aiohttp
 import hashlib
 import os
-from collections import Callable
-from typing import Union, Dict
+from typing import Union, Callable
 from urllib.parse import urlencode
 
 from aiohttp import web
 from aiohttp_session import get_session
 
+from api.database import fetch_user_by_sub, insert_user, update_user
 from api.logger import get_logger
-from api.schemas import UserSchema
 from api.settings import settings
 
 log = get_logger(__name__)
 
 
 def private_path(handler: Callable) -> Callable:
+    @wraps(handler)
     async def wrapper(request: web.Request, **kwargs) -> Union[Callable,  web.Response]:
         session = await get_session(request)
 
-        if "openid_identity" not in session:
+        if "user_id" not in session:
             raise web.HTTPUnauthorized()
 
         return await handler(request, **kwargs)
@@ -40,7 +41,8 @@ async def generate_google_authorization_url(request: web.Request) -> str:
         "response_type": "code",
         "redirect_uri": g_settings["redirect_url"],
         "client_id": g_settings["client_id"],
-        "state": session["oauth2_state"]
+        "state": session["oauth2_state"],
+        "prompt": "select_account"
     }
 
     authorization_url = f"{g_settings['authorization_endpoint']}?{urlencode(params)}"
@@ -49,6 +51,7 @@ async def generate_google_authorization_url(request: web.Request) -> str:
 
 async def exchange_google_code_for_tokens(request: web.Request) -> None:
     session = await get_session(request)
+    database = request.app["database"]
     g_settings = settings["oauth2"]["google"]
 
     if "oauth2_state" not in session \
@@ -74,8 +77,7 @@ async def exchange_google_code_for_tokens(request: web.Request) -> None:
         async with aiohttp.ClientSession() as client_session:
             async with client_session.post(g_settings["token_endpoint"], data=payload, headers=headers) as response:
                 if not response.status == HTTPStatus.OK:
-                    data = await response.text()
-                    log.error(f"Cannot exchange authorization code: {data}")
+                    log.error("Cannot exchange authorization code")
                 else:
                     data = await response.json()
                     id_token = data["id_token"].encode("utf-8")
@@ -83,11 +85,18 @@ async def exchange_google_code_for_tokens(request: web.Request) -> None:
                     encoded_payload = encoded_payload + b'=' * (-len(encoded_payload) % 4)
                     decoded_payload = base64.urlsafe_b64decode(encoded_payload)
                     payload = json.loads(decoded_payload.decode("utf-8"))
-                    session["openid_identity"] = payload
 
+                    user = await fetch_user_by_sub(database, payload["sub"])
 
-async def get_user_info(request: web.Request) -> Dict:
-    user_schema = UserSchema()
-    session = await get_session(request)
-    user = user_schema.dump(session["openid_identity"])
-    return user
+                    if user:
+                        user_id = user["id"]
+                        await update_user(database,
+                                          payload["given_name"], payload["family_name"],
+                                          payload["picture"])
+                    else:
+                        user_id = await insert_user(database,
+                                                    payload["sub"],
+                                                    payload["given_name"], payload["family_name"],
+                                                    payload["picture"])
+
+                    session["user_id"] = user_id

@@ -34,9 +34,6 @@ settings = {
         }
     },
     "openapi": {
-        "server": {
-            "url": env("API_OPENAPI_SERVER_URL", default="http://localhost:8080")
-        },
         "route": {
             "url": "/openapi.json",
             "name": "openapi"
@@ -45,19 +42,27 @@ settings = {
     "sse": {
         "retry": 30
     },
-    "cors": env("API_CORS_ALLOWED", cast=bool, default=False),
-    "server": {
-        "host": env("API_SERVER_HOST", default="127.0.0.1"),
-        "port": env("API_SERVER_PORT", cast=int, default=8080)
+    "cors": {
+        "allowed": env("API_CORS_ALLOWED", cast=bool, default=False),
+        "origin": env("API_CORS_origin", default="http://spa.lvh.me:3000"),
+        "headers": "X-Csrf-Token"
     },
     "spa": {
         "url": env("SPA_URL", default=None)
     },
     "session": {
         "cookie": {
-            "secret_key": env("API_COOKIE_SESSION_SECRET_KEY", default=None),
-            "cookie_name": "nicecream_history",
-            "secure": env("API_COOKIE_SESSION_SECURE", cast=bool, default=True)
+            "secret_key": env("API_SESSION_COOKIE_SECRET_KEY", default=None),
+            "cookie_name": "nicecream_history_session",
+            "secure": env("API_SESSION_COOKIE_SECURE", cast=bool, default=True),
+            "domain": ".lvh.me"
+        }
+    },
+    "csrf": {
+        "cookie": {
+            "cookie_name": "nicecream_history_csrf",
+            "secure": env("API_SESSION_COOKIE_SECURE", cast=bool, default=True),
+            "domain": ".lvh.me"
         }
     },
     "oauth2": {
