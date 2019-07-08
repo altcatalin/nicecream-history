@@ -17,11 +17,17 @@ async def generate_openapi_spec(app: web.Application) -> None:
     paths = {}
     schemas = []
     options = {
-        "servers": [
-            {
-                "url": app["settings"]["openapi"]["server"]["url"],
+        "info": {
+            "description": "[Cookie Authentication](https://swagger.io/docs/specification/authentication/cookie-authentication/) "
+                           "[OAuth2 Implicit Grant and SPA](https://auth0.com/blog/oauth2-implicit-grant-and-spa/)"
+        },
+        "securitySchemes": {
+            "cookieAuth": {
+                 "type": "apiKey",
+                "in": "cookie",
+                "name": app["settings"]["session"]["cookie"]["cookie_name"]
             }
-        ]
+        }
     }
 
     spec = APISpec(
@@ -57,7 +63,9 @@ async def generate_openapi_spec(app: web.Application) -> None:
                     schemas.append(schema)
 
             if path not in paths.keys():
-                paths[path] = operations
+                paths[path] = {}
+
+            paths[path].update(operations)
 
     for schema in schemas:
         schema_class = getattr(schemas_module, schema)

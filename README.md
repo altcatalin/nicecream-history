@@ -1,1 +1,5 @@
-Generate a secure random secret key: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+- [OAuth2 Implicit Grant and SPA](https://auth0.com/blog/oauth2-implicit-grant-and-spa/)  
+- [Using OAuth 2.0 for Web Server Applications](https://developers.google.com/identity/protocols/OAuth2WebServer)  
+- [Cookie Authentication](https://swagger.io/docs/specification/authentication/cookie-authentication/)  
+- [Localhost subdomains](https://nickjanetakis.com/blog/ngrok-lvhme-nipio-a-trilogy-for-local-development-and-testing)  
+- Generate a secure random secret key: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`  

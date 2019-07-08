@@ -1,12 +1,11 @@
 import json
+from functools import wraps
+from json import JSONDecodeError
 from typing import Callable, Dict, List, Union
 
 from aiohttp import web
-from aiohttp.web_middlewares import middleware
 from marshmallow import Schema, fields, pre_dump, validate
 from marshmallow.exceptions import ValidationError
-
-from api.utils import issubclass_py37
 
 
 class BaseSchema(Schema):
@@ -16,6 +15,10 @@ class BaseSchema(Schema):
             return [dict(element) for element in data]
 
         return data
+
+
+class RequestQueryPaginationSchema(Schema):
+    offset = fields.Integer(missing=0, default=0, validate=validate.Range(min=0))
 
 
 class SongSchema(BaseSchema):
@@ -34,34 +37,51 @@ class ChannelExtraSchema(ChannelSchema):
     song_title = fields.Str(required=True)
 
 
-class HistoryInSchema(BaseSchema):
-    song_id = fields.Integer(required=True)
-    channel_id = fields.Integer(required=True)
-
-
-class HistorySchema(HistoryInSchema):
+class HistorySchema(BaseSchema):
     id = fields.Integer(required=True)
     created_at = fields.DateTime(required=True)
+    song_id = fields.Integer(required=True)
     song_title = fields.Str(required=True)
+    channel_id = fields.Integer(required=True)
+    bookmark_id = fields.Integer(default=0)
 
 
-class HistoryRequestFiltersSchema(Schema):
+class HistoryInputSchema(HistorySchema):
+    class Meta:
+        dump_only = ("id", "created_at", "song_title", "bookmark_id")
+
+
+class HistoryRequestQuerySchema(RequestQueryPaginationSchema):
     channel_id = fields.Integer(missing=0, default=0, validate=validate.Range(min=1))
-    offset = fields.Integer(missing=0, default=0, validate=validate.Range(min=0))
 
 
-class SSEMessageSchema(Schema):
-    id = fields.Integer(required=True)
-    event = fields.Str(required=True)
-    data = fields.Nested(HistorySchema, required=True)
-    retry = fields.Integer(required=True)
-
-
-class UserSchema(Schema):
-    sub = fields.Integer(required=True)
+class UserSchema(BaseSchema):
+    id = fields.Integer(required=True, dump_only=True)
+    sub = fields.String(required=True)
     picture = fields.Url(required=True)
     given_name = fields.Str(required=True)
     family_name = fields.Str(required=True)
+
+
+class BookmarkSchema(BaseSchema):
+    id = fields.Integer(required=True, dump_only=True)
+    created_at = fields.DateTime(required=True, dump_only=True)
+    song_id = fields.Integer(required=True)
+    song_title = fields.Str(required=True, dump_only=True)
+    user_id = fields.Integer(required=True)
+
+
+class BookmarkRequestPathSchema(Schema):
+    bookmark_id = fields.Integer(required=True, validate=validate.Range(min=1))
+
+
+class BookmarksRequestQuerySchema(RequestQueryPaginationSchema):
+    pass
+
+
+class BookmarksRequestBodySchema(BookmarkSchema):
+    class Meta:
+        fields = ("song_id",)
 
 
 class HTTPClientErrorSchema(Schema):
@@ -69,25 +89,36 @@ class HTTPClientErrorSchema(Schema):
 
 
 class HTTPValidationErrorSchema(Schema):
-    detail = fields.Dict(keys=fields.Str(), values=fields.List(fields.Dict()))
+    detail = fields.Dict(keys=fields.Str(), values=fields.List(fields.Dict(keys=fields.Str(),
+                                                                           values=fields.List(fields.Str()))))
 
 
-def request_validation(query_schema: Schema = None, body_schema: Schema = None) -> Callable:
+def request_validation(query_schema: Schema = None, body_schema: Schema = None, path_schema: Schema = None) -> Callable:
     def handler_wrapper(handler: Callable) -> Callable:
+        @wraps(handler)
         async def request_wrapper(request: web.Request, **kwargs) -> Union[Callable, web.Response]:
             errors = {}
+
+            if path_schema:
+                try:
+                    path = path_schema.load(dict(request.match_info))
+                    request["path"] = path
+                except ValidationError as e:
+                    errors["path"] = e.messages
 
             if query_schema:
                 try:
                     query = query_schema.load(dict(request.query))
                     request["query"] = query
                 except ValidationError as e:
-                    errors["path"] = e.messages
+                    errors["query"] = e.messages
 
             if body_schema:
                 try:
-                    body = body_schema.loads(await request.json())
+                    body = body_schema.load(await request.json())
                     request["body"] = body
+                except JSONDecodeError as e:
+                    raise web.HTTPUnsupportedMediaType()
                 except ValidationError as e:
                     errors["body"] = e.messages
 

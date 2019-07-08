@@ -1,4 +1,5 @@
 import asyncio
+import json
 from _weakrefset import WeakSet
 from typing import Optional, Dict
 
@@ -83,7 +84,7 @@ async def sse_redis_subscriber(app: web.Application) -> None:
             fs = []
 
             for stream in app['sse_streams']:
-                fs.append(stream.send(message.id,
+                fs.append(stream.send(message,
                                       id=history["id"],
                                       event=settings["redis"]["channel"],
                                       retry=settings["sse"]["retry"]))
