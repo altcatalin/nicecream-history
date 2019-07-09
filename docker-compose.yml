@@ -53,6 +53,7 @@ services:
       - ./crawler:/usr/src/nicecream-history/crawler
       - ./alembic:/usr/src/nicecream-history/alembic
       - ./wait.sh:/wait.sh
+      - ./docker-entrypoint.sh:/docker-entrypoint.sh
     depends_on:
       - postgres
       - redis
