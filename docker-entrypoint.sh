@@ -2,7 +2,7 @@
 set -e
 
 # Inject AWS SSM parameters into ENV
-if [[ -n AWS_SSM_PREFIX ]]; then
+if [[ -n "${AWS_SSM_PREFIX}" ]]; then
     pattern="AWS SSM: %s -> %s\n"
 
     for group in $(echo "$AWS_SSM_PREFIX" | tr "," "\n")
@@ -16,10 +16,10 @@ if [[ -n AWS_SSM_PREFIX ]]; then
                 continue
             fi
 
-            if [[ -z ${!name} ]]; then
+            if [[ -z "${!name}" ]]; then
                 export "$name"="$value"
 
-                if [[ -n AWS_SSM_DEBUG ]]; then
+                if [[ -n "${AWS_SSM_DEBUG}" ]]; then
                     printf "$pattern" "$name" "$value"
                 else
                     printf "$pattern" "$name" "Done"

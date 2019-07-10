@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Encryption: KMS'
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+    - Label:
+        default: 'Parent Stacks'
+      Parameters:
+      - ParentVPCStack
+      - ParentClusterStack
+    - Label:
+        default: 'Parameters'
+      Parameters:
+      - Administrators
+#      - Users
+    - Label:
+        default: 'Tags'
+      Parameters:
+      - EnvironmentName
+Parameters:
+  ParentVPCStack:
+    Description: 'Stack name of parent VPC stack based on vpc/vpc-*azs.yaml template.'
+    Type: String
+  ParentClusterStack:
+    Description: 'Stack name of parent Cluster stack based on ecs/cluster.yaml template.'
+    Type: String
+  EnvironmentName:
+    Description: Environment name
+    Type: String
+  Administrators:
+    Description: 'Key administrators'
+    Type: CommaDelimitedList
+#  Users:
+#    Description: 'Key users'
+#    Type: CommaDelimitedList
+#    Default: ''
+#Conditions:
+#  HasUsers: !Not [!Equals [!Join [',', !Ref Users], '']]
+Resources:
+  Key: 
+    Type: AWS::KMS::Key
+    Properties: 
+      Description: !Sub '${ParentVPCStack} parameters encryption key'
+      KeyPolicy: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Sid: "Allow administration of the key"
+            Effect: "Allow"
+            Principal: 
+              AWS: !Ref Administrators
+            Action: 
+              - "kms:Create*"
+              - "kms:Describe*"
+              - "kms:Enable*"
+              - "kms:List*"
+              - "kms:Put*"
+              - "kms:Update*"
+              - "kms:Revoke*"
+              - "kms:Disable*"
+              - "kms:Get*"
+              - "kms:Delete*"
+              - "kms:ScheduleKeyDeletion"
+              - "kms:CancelKeyDeletion"
+            Resource: "*"
+          - 
+            Sid: "Allow use of the key"
+            Effect: "Allow"
+            Principal:
+              AWS: !Split
+                - ','
+                - !Sub
+                  - '${AdministratorsString},${UsersString}'
+                  - AdministratorsString: !Join [',', !Ref Administrators]
+                    UsersString: {'Fn::ImportValue': !Sub '${ParentClusterStack}-ECSTaskRoleARN'}
+#              AWS:
+#                !If
+#                - HasUsers
+#                # - !Ref Users
+#                - Fn::Split:
+#                  - ','
+#                  - Fn::Sub:
+#                    - '${AdministratorsString},${UsersString}'
+#                    - AdministratorsString: !Join [',', !Ref Administrators]
+#                      UsersString: !Join [',', !Ref Users]
+#                - !Ref Administrators
+            Action: 
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+      Tags:
+      - Key: Name
+        Value: !Sub '${EnvironmentName} KMS'
+  Alias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${AWS::StackName}'
+      TargetKeyId: !Ref Key
+Outputs:
+  StackName:
+    Description: 'Stack name.'
+    Value: !Sub '${AWS::StackName}'
+  KeyId:
+    Description: 'KMS key id.'
+    Value: !Ref Key
