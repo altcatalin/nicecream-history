@@ -44,7 +44,7 @@ settings = {
     },
     "cors": {
         "allowed": env("API_CORS_ALLOWED", cast=bool, default=False),
-        "origin": env("API_CORS_origin", default="http://spa.lvh.me:3000"),
+        "origin": env("API_CORS_ORIGIN", default=None),
         "headers": "X-Csrf-Token"
     },
     "spa": {
@@ -55,14 +55,14 @@ settings = {
             "secret_key": env("API_SESSION_COOKIE_SECRET_KEY", default=None),
             "cookie_name": "nicecream_history_session",
             "secure": env("API_SESSION_COOKIE_SECURE", cast=bool, default=True),
-            "domain": ".lvh.me"
+            "domain": env("API_SESSION_COOKIE_DOMAIN", default=None)
         }
     },
     "csrf": {
         "cookie": {
             "cookie_name": "nicecream_history_csrf",
-            "secure": env("API_SESSION_COOKIE_SECURE", cast=bool, default=True),
-            "domain": ".lvh.me"
+            "secure": env("API_CSRF_COOKIE_SECURE", cast=bool, default=True),
+            "domain": env("API_CSRF_COOKIE_DOMAIN", default=None)
         }
     },
     "oauth2": {
@@ -86,10 +86,14 @@ assert settings["redis"]["port"] is not None
 assert settings["redis"]["database"] is not None
 assert settings["spa"]["url"] is not None
 assert settings["session"]["cookie"]["secret_key"] is not None
+assert settings["session"]["cookie"]["domain"] is not None
 assert settings["oauth2"]["google"]["client_id"] is not None
 assert settings["oauth2"]["google"]["client_secret"] is not None
 assert settings["oauth2"]["google"]["redirect_url"] is not None
+assert settings["csrf"]["cookie"]["domain"] is not None
 
+if settings["cors"]["allowed"]:
+    assert settings["cors"]["origin"] is not None
 
 settings["postgres"]["url"] = "postgresql://{user}:{password}@{host}:{port}/{database}".format(**settings["postgres"])
 settings["redis"]["url"] = "redis://{host}:{port}?db={database}".format(**settings["redis"])

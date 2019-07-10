@@ -1,0 +1,88 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "ECS: Assessment Worker"
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+    - Label:
+        default: 'Parent Stacks'
+      Parameters:
+      - ParentClusterStack
+#      - ParentTaskRoleStack
+    - Label:
+        default: 'Task Parameters'
+      Parameters:
+      - Image
+      - SSMParametersPrefix
+      - ContainerMaxCPU
+      - ContainerMaxMemory
+      - Command
+Parameters:
+  ParentClusterStack:
+    Description: 'Stack name of parent Cluster stack based on ecs/cluster.yaml template.'
+    Type: String
+#  ParentTaskRoleStack:
+#    Description: 'Optional stack name of parent task role based on ecs-task-role.yaml template.'
+#    Type: String
+#    Default: ''
+  Image:
+    Description: 'The image to use for a container, which is passed directly to the Docker daemon. You can use images in the Docker Hub registry or specify other repositories (repository-url/image:tag).'
+    Type: String
+  SSMParametersPrefix:
+    Description: 'SSM parameters path prefix. Parameters will be injected into environment.'
+    Type: String
+    Default: ''
+  ContainerMaxCPU:
+    Description: 'The maximum number of cpu reservation per container that you plan to run on this cluster. A container instance has 1,024 CPU units for every CPU core.'
+    Type: Number
+    Default: 256
+  ContainerMaxMemory:
+    Description: 'The maximum number of memory reservation (in MB)  per container that you plan to run on this cluster.'
+    Type: Number
+    Default: 256
+  Command:
+    Description: 'Command'
+    Type: CommaDelimitedList
+    Default: ''
+Conditions:
+#  HasCommand: !Not [!Equals [!Ref Command, '']]
+  HasCommand: !Not [!Equals [!Join [",", !Ref Command], '']]
+Resources:
+  TaskDefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: !Ref 'AWS::StackName'
+      NetworkMode: bridge
+      TaskRoleArn: {'Fn::ImportValue': !Sub '${ParentClusterStack}-ECSTaskRole'}
+#        !If
+#          - HasTaskRole
+#          - {'Fn::ImportValue': !Sub '${ParentTaskRoleStack}-ECSTaskRole'}
+#          - !Ref AWS::NoValue
+      ContainerDefinitions:
+      - Name: main # if you change this, you also must change the AWS::ECS::Service
+        Image: !Ref Image
+        Memory: !Ref ContainerMaxMemory
+        Cpu: !Ref ContainerMaxCPU
+        Environment:
+          - Name: AWS_SSM_PREFIX
+            Value: !Ref SSMParametersPrefix
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref 'AWS::Region'
+        Essential: true
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            'awslogs-region': !Ref 'AWS::Region'
+            'awslogs-group': {'Fn::ImportValue': !Sub '${ParentClusterStack}-LogGroup'}
+            'awslogs-stream-prefix': !Ref 'AWS::StackName'
+        WorkingDirectory: /usr/src/nicecream-history/alembic
+        Command: !If
+          - HasCommand
+          - !Ref Command
+          - !Ref AWS::NoValue
+Outputs:
+  StackName:
+    Description: 'Stack name.'
+    Value: !Sub '${AWS::StackName}'
+  TaskARN:
+    Description: 'Task ARN'
+    Value: !Ref TaskDefinition

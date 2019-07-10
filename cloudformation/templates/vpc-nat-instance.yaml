@@ -1,0 +1,586 @@
+---
+# Copyright 2018 widdix GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'VPC: highly available NAT instance (optional SSH bastion instance)'
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+    - Label:
+        default: 'Parent Stacks'
+      Parameters:
+      - ParentVPCStack
+      - ParentSSHBastionStack
+      - ParentAlertStack
+      - ParentZoneStack
+      - ParentClientStack
+    - Label:
+        default: 'EC2 Parameters'
+      Parameters:
+      # - SubnetZone
+      - NATInstanceType
+      - KeyName
+      - IAMUserSSHAccess
+      # TODO - SystemsManagerAccess
+      - LogsRetentionInDays
+      - SubDomainNameWithDot
+      - SSHAccessCidrIp
+      - SSHAccessCidrIp2
+    - Label:
+        default: 'Tags'
+      Parameters:
+      - EnvironmentName
+Parameters:
+  EnvironmentName:
+    Description: Environment name
+    Type: String
+  ParentVPCStack:
+    Description: 'Stack name of parent VPC stack based on vpc/vpc-*azs.yaml template.'
+    Type: String
+  ParentSSHBastionStack:
+    Description: 'Optional but recommended stack name of parent SSH bastion host/instance stack based on vpc/vpc-*-bastion.yaml template.'
+    Type: String
+    Default: ''
+  ParentAlertStack:
+    Description: 'Optional but recommended stack name of parent alert stack based on operations/alert.yaml template.'
+    Type: String
+    Default: ''
+  ParentZoneStack:
+    Description: 'Optional stack name of parent zone stack based on vpc/zone-*.yaml template.'
+    Type: String
+    Default: ''
+  ParentClientStack:
+    Description: 'Stack name of parent client stack based on state/client-sg.yaml template.'
+    Type: String
+    Default: ''
+  SubnetZone:
+    Description: 'Subnet zone.'
+    Type: String
+    Default: ''
+    AllowedValues:
+      - ''
+      - A
+      - B
+#      - C
+#      - D
+  KeyName:
+    Description: 'Optional key pair of the ec2-user to establish a SSH connection to the NAT instance.'
+    Type: String
+    Default: ''
+  IAMUserSSHAccess:
+    Description: 'Synchronize public keys of IAM users to enable personalized SSH access (Doc: https://cloudonaut.io/manage-aws-ec2-ssh-access-with-iam/).'
+    Type: String
+    Default: false
+    AllowedValues:
+    - true
+    - false
+  NATInstanceType:
+    Description: 'Instance type of the NAT instance. Keep in mind that different instances come with different network capabilities.'
+    Type: String
+    Default: 't2.micro'
+  LogsRetentionInDays:
+    Description: 'Specifies the number of days you want to retain log events.'
+    Type: Number
+    Default: 14
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+  SubDomainNameWithDot:
+    Description: 'Name that is used to create the DNS entry with trailing dot, e.g. §{SubDomainNameWithDot}§{HostedZoneName}. Leave blank for naked (or apex and bare) domain. Requires ParentZoneStack parameter!'
+    Type: String
+    Default: 'nat.'
+  SSHAccessCidrIp:
+    Description: 'Optional restrict SSH access only from this CidrIp'
+    Type: String
+    Default: ''
+  SSHAccessCidrIp2:
+    Description: 'Optional restrict SSH access only from this CidrIp'
+    Type: String
+    Default: ''
+Mappings:
+  RegionMap: # TODO update to Amazon Linux 2 (don't forget to adjust awslogs config as well)
+    'ap-south-1':
+      NATAMI: 'ami-0aba92643213491b9'
+    'eu-west-3':
+      NATAMI: 'ami-0050bb60cea70c5b3'
+    'eu-west-2':
+      NATAMI: 'ami-e6768381'
+    'eu-west-1':
+      NATAMI: 'ami-0ea87e2bfa81ca08a'
+    'ap-northeast-2':
+      NATAMI: 'ami-08cfa02141f9e9bee'
+    'ap-northeast-1':
+      NATAMI: 'ami-0cf78ae724f63bac0'
+    'sa-east-1':
+      NATAMI: 'ami-09c013530239687aa'
+    'ca-central-1':
+      NATAMI: 'ami-b61b96d2'
+    'ap-southeast-1':
+      NATAMI: 'ami-0cf24653bcf894797'
+    'ap-southeast-2':
+      NATAMI: 'ami-00c1445796bc0a29f'
+    'eu-central-1':
+      NATAMI: 'ami-06465d49ba60cf770'
+    'us-east-1':
+      NATAMI: 'ami-0422d936d535c63b1'
+    'us-east-2':
+      NATAMI: 'ami-0f9c61b5a562a16af'
+    'us-west-1':
+      NATAMI: 'ami-0d4027d2cdbca669d'
+    'us-west-2':
+      NATAMI: 'ami-40d1f038'
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref KeyName, '']]
+  HasIAMUserSSHAccess: !Equals [!Ref IAMUserSSHAccess, 'true']
+  # HasSSHBastionSecurityGroup: !Not [!Equals [!Ref ParentSSHBastionStack, '']]
+  HasSSHBastionSecurityGroup: !And [!Not [!Equals [!Ref ParentSSHBastionStack, '']], !Or [Condition: HasKeyName, Condition: HasIAMUserSSHAccess]]
+  # HasNotSSHBastionSecurityGroup: !Equals [!Ref ParentSSHBastionStack, '']
+  HasNotSSHBastionSecurityGroup: !And [!Equals [!Ref ParentSSHBastionStack, ''], !Or [Condition: HasKeyName, Condition: HasIAMUserSSHAccess], !Not [!Equals [!Ref SSHAccessCidrIp, '']]]
+  HasNotSSHBastionSecurityGroup2: !And [!Equals [!Ref ParentSSHBastionStack, ''], !Or [Condition: HasKeyName, Condition: HasIAMUserSSHAccess], !Not [!Equals [!Ref SSHAccessCidrIp2, '']]]
+  HasAlertTopic: !Not [!Equals [!Ref ParentAlertStack, '']]
+  HasZone: !Not [!Equals [!Ref ParentZoneStack, '']]
+  HasParentClientStack: !And [!Not [!Equals [!Ref ParentClientStack, '']], !Or [Condition: HasKeyName, Condition: HasIAMUserSSHAccess]]
+  HasSubnetZone: !Not [!Equals [!Ref SubnetZone, '']]
+Resources:
+  RecordSet:
+    Condition: HasZone
+    Type: 'AWS::Route53::RecordSet'
+    Properties:
+      HostedZoneId: {'Fn::ImportValue': !Sub '${ParentZoneStack}-HostedZoneId'}
+      Name: !Sub
+      - '${SubDomainNameWithDot}${HostedZoneName}'
+      - SubDomainNameWithDot: !Ref SubDomainNameWithDot
+        HostedZoneName: {'Fn::ImportValue': !Sub '${ParentZoneStack}-HostedZoneName'}
+      ResourceRecords:
+      - !Ref EIP
+      TTL: '60'
+      Type: A
+  EIP:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: vpc
+  Logs:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      RetentionInDays: !Ref LogsRetentionInDays
+  NATSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      Tags:
+      - Key: Name
+        Value: !Sub '${EnvironmentName} NAT'
+      GroupDescription: !Ref 'AWS::StackName'
+      SecurityGroupEgress:
+      - IpProtocol: udp
+        FromPort: 123
+        ToPort: 123
+        CidrIp: '0.0.0.0/0'
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: '0.0.0.0/0'
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: '0.0.0.0/0'
+      SecurityGroupIngress:
+      - IpProtocol: udp
+        FromPort: 123
+        ToPort: 123
+        CidrIp: {'Fn::ImportValue': !Sub '${ParentVPCStack}-CidrBlock'}
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: {'Fn::ImportValue': !Sub '${ParentVPCStack}-CidrBlock'}
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: {'Fn::ImportValue': !Sub '${ParentVPCStack}-CidrBlock'}
+      VpcId: {'Fn::ImportValue': !Sub '${ParentVPCStack}-VPC'}
+  NATSecurityGroupInSSHBastion:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Condition: HasSSHBastionSecurityGroup
+    Properties:
+      GroupId: !Ref NATSecurityGroup
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      SourceSecurityGroupId: {'Fn::ImportValue': !Sub '${ParentSSHBastionStack}-SecurityGroup'}
+  NATSecurityGroupInSSHWorld:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Condition: HasNotSSHBastionSecurityGroup
+    Properties:
+      GroupId: !Ref NATSecurityGroup
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: !Ref SSHAccessCidrIp
+  NATSecurityGroupInSSHWorld2:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Condition: HasNotSSHBastionSecurityGroup2
+    Properties:
+      GroupId: !Ref NATSecurityGroup
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: !Ref SSHAccessCidrIp2
+  NATInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: '/'
+      Roles:
+      - !Ref NATIAMRole
+  NATIAMRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - 'ec2.amazonaws.com'
+          Action:
+          - 'sts:AssumeRole'
+      Path: '/'
+      Policies:
+      - PolicyName: ec2
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Sid: Stmt1425023276000
+            Effect: Allow
+            Action:
+            - 'ec2:AssociateAddress'
+            - 'ec2:ModifyInstanceAttribute'
+            - 'ec2:CreateRoute'
+            - 'ec2:ReplaceRoute'
+            Resource:
+            - '*'
+      - PolicyName: logs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'logs:CreateLogGroup'
+            - 'logs:CreateLogStream'
+            - 'logs:PutLogEvents'
+            - 'logs:DescribeLogStreams'
+            Resource:
+            - 'arn:aws:logs:*:*:*'
+  NATIAMPolicySSHAccess:
+    Type: 'AWS::IAM::Policy'
+    Condition: HasIAMUserSSHAccess
+    Properties:
+      Roles:
+      - !Ref NATIAMRole
+      PolicyName: iam
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - 'iam:ListUsers'
+          Resource:
+          - '*'
+        - Effect: Allow
+          Action:
+          - 'iam:ListSSHPublicKeys'
+          - 'iam:GetSSHPublicKey'
+          - 'iam:GetGroup'
+          Resource:
+          - !Sub 'arn:aws:iam::${AWS::AccountId}:user/*'
+          - !Sub 'arn:aws:iam::${AWS::AccountId}:group/*'
+  NATLaunchConfiguration:
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
+    Metadata:
+      'AWS::CloudFormation::Init':
+        configSets:
+          default: !If [HasIAMUserSSHAccess, [awslogs, ssh-access, config], [awslogs, config]]
+        awslogs:
+          packages:
+            yum:
+              awslogs: []
+          files:
+            '/etc/awslogs/awscli.conf':
+              content: !Sub |
+                [default]
+                region = ${AWS::Region}
+                [plugins]
+                cwlogs = cwlogs
+              mode: '000644'
+              owner: root
+              group: root
+            '/etc/awslogs/awslogs.conf':
+              content: !Sub |
+                [general]
+                state_file = /var/lib/awslogs/agent-state
+                [/var/log/messages]
+                datetime_format = %b %d %H:%M:%S
+                file = /var/log/messages
+                log_stream_name = {instance_id}/var/log/messages
+                log_group_name = ${Logs}
+                [/var/log/secure]
+                datetime_format = %b %d %H:%M:%S
+                file = /var/log/secure
+                log_stream_name = {instance_id}/var/log/secure
+                log_group_name = ${Logs}
+                [/var/log/cron]
+                datetime_format = %b %d %H:%M:%S
+                file = /var/log/cron
+                log_stream_name = {instance_id}/var/log/cron
+                log_group_name = ${Logs}
+                [/var/log/cloud-init.log]
+                datetime_format = %b %d %H:%M:%S
+                file = /var/log/cloud-init.log
+                log_stream_name = {instance_id}/var/log/cloud-init.log
+                log_group_name = ${Logs}
+                [/var/log/cfn-init.log]
+                datetime_format = %Y-%m-%d %H:%M:%S
+                file = /var/log/cfn-init.log
+                log_stream_name = {instance_id}/var/log/cfn-init.log
+                log_group_name = ${Logs}
+                [/var/log/cfn-hup.log]
+                datetime_format = %Y-%m-%d %H:%M:%S
+                file = /var/log/cfn-hup.log
+                log_stream_name = {instance_id}/var/log/cfn-hup.log
+                log_group_name = ${Logs}
+                [/var/log/cfn-init-cmd.log]
+                datetime_format = %Y-%m-%d %H:%M:%S
+                file = /var/log/cfn-init-cmd.log
+                log_stream_name = {instance_id}/var/log/cfn-init-cmd.log
+                log_group_name = ${Logs}
+                [/var/log/cloud-init-output.log]
+                file = /var/log/cloud-init-output.log
+                log_stream_name = {instance_id}/var/log/cloud-init-output.log
+                log_group_name = ${Logs}
+                [/var/log/dmesg]
+                file = /var/log/dmesg
+                log_stream_name = {instance_id}/var/log/dmesg
+                log_group_name = ${Logs}
+              mode: '000644'
+              owner: root
+              group: root
+          services:
+            sysvinit:
+              awslogs:
+                enabled: true
+                ensureRunning: true
+                packages:
+                  yum:
+                  - awslogs
+                files:
+                - '/etc/awslogs/awslogs.conf'
+                - '/etc/awslogs/awscli.conf'
+        ssh-access:
+          files:
+            '/opt/authorized_keys_command.sh':
+              content: |
+                #!/bin/bash -e
+                if [ -z "$1" ]; then
+                  exit 1
+                fi
+                UnsaveUserName="$1"
+                UnsaveUserName=${UnsaveUserName//".plus."/"+"}
+                UnsaveUserName=${UnsaveUserName//".equal."/"="}
+                UnsaveUserName=${UnsaveUserName//".comma."/","}
+                UnsaveUserName=${UnsaveUserName//".at."/"@"}
+                aws iam list-ssh-public-keys --user-name "$UnsaveUserName" --query "SSHPublicKeys[?Status == 'Active'].[SSHPublicKeyId]" --output text | while read -r KeyId; do
+                  aws iam get-ssh-public-key --user-name "$UnsaveUserName" --ssh-public-key-id "$KeyId" --encoding SSH --query "SSHPublicKey.SSHPublicKeyBody" --output text
+                done
+              mode: '000755'
+              owner: root
+              group: root
+            '/opt/import_users.sh':
+              content: |
+                #!/bin/bash -e
+                # aws iam list-users --query "Users[].[UserName]" --output text | while read User; do
+                aws iam get-group --group-name Admin --query "Users[].[UserName]" --output text | while read User; do
+                  SaveUserName="$User"
+                  SaveUserName=${SaveUserName//"+"/".plus."}
+                  SaveUserName=${SaveUserName//"="/".equal."}
+                  SaveUserName=${SaveUserName//","/".comma."}
+                  SaveUserName=${SaveUserName//"@"/".at."}
+                  if [ "${#SaveUserName}" -le "32" ]; then
+                    if ! id -u "$SaveUserName" >/dev/null 2>&1; then
+                      #sudo will read each file in /etc/sudoers.d, skipping file names that end in ‘~’ or contain a ‘.’ character to avoid causing problems with package manager or editor temporary/backup files.
+                      SaveUserFileName=$(echo "$SaveUserName" | tr "." " ")
+                      /usr/sbin/useradd "$SaveUserName"
+                      echo "$SaveUserName ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/$SaveUserFileName"
+                    fi
+                  else
+                    echo "Can not import IAM user ${SaveUserName}. User name is longer than 32 characters."
+                  fi
+                done
+              mode: '000755'
+              owner: root
+              group: root
+            '/etc/cron.d/import_users':
+              content: |
+                */10 * * * * root /opt/import_users.sh
+              mode: '000644'
+              owner: root
+              group: root
+          commands:
+            'a_configure_sshd_command':
+              command: 'sed -i "s:#AuthorizedKeysCommand none:AuthorizedKeysCommand /opt/authorized_keys_command.sh:g" /etc/ssh/sshd_config'
+            'b_configure_sshd_commanduser':
+              command: 'sed -i "s:#AuthorizedKeysCommandUser nobody:AuthorizedKeysCommandUser nobody:g" /etc/ssh/sshd_config'
+            'c_import_users':
+              command: './import_users.sh'
+              cwd: '/opt'
+          services:
+            sysvinit:
+              sshd:
+                enabled: true
+                ensureRunning: true
+                commands:
+                - 'a_configure_sshd_command'
+                - 'b_configure_sshd_commanduser'
+        config:
+          files:
+            '/etc/cfn/cfn-hup.conf':
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+              mode: '000400'
+              owner: root
+              group: root
+            '/etc/cfn/hooks.d/cfn-auto-reloader.conf':
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.NATLaunchConfiguration.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init --verbose --stack=${AWS::StackName} --region=${AWS::Region} --resource=NATLaunchConfiguration
+                runas=root
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                - '/etc/cfn/cfn-hup.conf'
+                - '/etc/cfn/hooks.d/cfn-auto-reloader.conf'
+    Properties:
+      AssociatePublicIpAddress: true
+      EbsOptimized: false
+      IamInstanceProfile: !Ref NATInstanceProfile
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', NATAMI]
+      InstanceType: !Ref NATInstanceType
+      SecurityGroups:
+      - !Ref NATSecurityGroup
+      - !If [HasParentClientStack, {'Fn::ImportValue': !Sub '${ParentClientStack}-ClientSecurityGroup'}, !Ref 'AWS::NoValue']
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
+      UserData: !If
+        - HasSubnetZone
+        - 'Fn::Base64': !Sub
+          - |
+            #!/bin/bash -ex
+            trap '/opt/aws/bin/cfn-signal -e 1 --region ${Region} --stack ${StackName} --resource NATAutoScalingGroup' ERR
+            INSTANCEID=$(curl -s -m 60 http://169.254.169.254/latest/meta-data/instance-id)
+            aws --region ${Region} ec2 associate-address --instance-id $INSTANCEID --allocation-id ${EIPAllocationId}
+            aws --region ${Region} ec2 modify-instance-attribute --instance-id $INSTANCEID --source-dest-check "{\"Value\": false}"
+            aws --region ${Region} ec2 replace-route --route-table-id ${RouteTablePrivate} --destination-cidr-block "0.0.0.0/0" --instance-id $INSTANCEID || aws --region ${Region} ec2 create-route --route-table-id ${RouteTablePrivate} --destination-cidr-block "0.0.0.0/0" --instance-id $INSTANCEID
+            /opt/aws/bin/cfn-init -v --stack ${StackName} --resource NATLaunchConfiguration --region ${Region}
+            /opt/aws/bin/cfn-signal -e 0 --region ${Region} --stack ${StackName} --resource NATAutoScalingGroup
+          - RouteTablePrivate: {'Fn::ImportValue': !Sub '${ParentVPCStack}-RouteTable${SubnetZone}Private'}
+            Region: !Ref 'AWS::Region'
+            StackName: !Ref 'AWS::StackName'
+            EIPAllocationId: !GetAtt 'EIP.AllocationId'
+        - 'Fn::Base64': !Sub
+          - |
+            #!/bin/bash -ex
+            trap '/opt/aws/bin/cfn-signal -e 1 --region ${Region} --stack ${StackName} --resource NATAutoScalingGroup' ERR
+            INSTANCEID=$(curl -s -m 60 http://169.254.169.254/latest/meta-data/instance-id)
+            aws --region ${Region} ec2 associate-address --instance-id $INSTANCEID --allocation-id ${EIPAllocationId}
+            aws --region ${Region} ec2 modify-instance-attribute --instance-id $INSTANCEID --source-dest-check "{\"Value\": false}"
+            aws --region ${Region} ec2 replace-route --route-table-id ${RouteTableAPrivate} --destination-cidr-block "0.0.0.0/0" --instance-id $INSTANCEID || aws --region ${Region} ec2 create-route --route-table-id ${RouteTableAPrivate} --destination-cidr-block "0.0.0.0/0" --instance-id $INSTANCEID
+            aws --region ${Region} ec2 replace-route --route-table-id ${RouteTableBPrivate} --destination-cidr-block "0.0.0.0/0" --instance-id $INSTANCEID || aws --region ${Region} ec2 create-route --route-table-id ${RouteTableBPrivate} --destination-cidr-block "0.0.0.0/0" --instance-id $INSTANCEID
+            /opt/aws/bin/cfn-init -v --stack ${StackName} --resource NATLaunchConfiguration --region ${Region}
+            /opt/aws/bin/cfn-signal -e 0 --region ${Region} --stack ${StackName} --resource NATAutoScalingGroup
+          - RouteTableAPrivate: {'Fn::ImportValue': !Sub '${ParentVPCStack}-RouteTableAPrivate'}
+            RouteTableBPrivate: {'Fn::ImportValue': !Sub '${ParentVPCStack}-RouteTableBPrivate'}
+            Region: !Ref 'AWS::Region'
+            StackName: !Ref 'AWS::StackName'
+            EIPAllocationId: !GetAtt 'EIP.AllocationId'
+  NATAutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      DesiredCapacity: '1'
+      LaunchConfigurationName: !Ref NATLaunchConfiguration
+      MaxSize: '1'
+      MinSize: '1'
+      Tags:
+      - Key: Name
+        # Value: !Sub '${EnvironmentName} NAT Subnet${SubnetZone}'
+        Value: !Sub '${EnvironmentName} NAT'
+        PropagateAtLaunch: true
+      NotificationConfigurations: !If
+      - HasAlertTopic
+      - - NotificationTypes:
+          - 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR'
+          TopicARN: {'Fn::ImportValue': !Sub '${ParentAlertStack}-TopicARN'}
+      - []
+      VPCZoneIdentifier:
+      - !If [HasSubnetZone, {'Fn::ImportValue': !Sub '${ParentVPCStack}-Subnet${SubnetZone}Public'}, !Ref 'AWS::NoValue']
+      - !If [HasSubnetZone, !Ref 'AWS::NoValue', {'Fn::ImportValue': !Sub '${ParentVPCStack}-SubnetAPublic'}]
+      - !If [HasSubnetZone, !Ref 'AWS::NoValue', {'Fn::ImportValue': !Sub '${ParentVPCStack}-SubnetBPublic'}]
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT10M
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        PauseTime: PT10M
+        SuspendProcesses:
+        - HealthCheck
+        - ReplaceUnhealthy
+        - AZRebalance
+        - AlarmNotification
+        - ScheduledActions
+        WaitOnResourceSignals: true
+  CPUTooHighAlarm:
+    Condition: HasAlertTopic
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: 'Average CPU utilization over last 10 minutes higher than 80%'
+      Namespace: 'AWS/EC2'
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: 600
+      EvaluationPeriods: 1
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 80
+      AlarmActions:
+      - {'Fn::ImportValue': !Sub '${ParentAlertStack}-TopicARN'}
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value: !Ref NATAutoScalingGroup
+Outputs:
+  TemplateID:
+    Description: 'cloudonaut.io template id.'
+    Value: 'vpc/vpc-nat-instance'
+  TemplateVersion:
+    Description: 'cloudonaut.io template version.'
+    Value: '7.2.0'
+  StackName:
+    Description: 'Stack name.'
+    Value: !Sub '${AWS::StackName}'
+  IPAddress:
+    Description: 'The public IP address of the NAT instance.'
+    Value: !Ref EIP
+    Export:
+      Name: !Sub '${AWS::StackName}-IPAddress'
