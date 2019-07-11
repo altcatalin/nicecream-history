@@ -13,7 +13,14 @@ before_script:
   - docker-compose run migrations
 
 script:
-  - docker-compose run api pytest tests/integration
+  - docker-compose run api pytest --cov tests/integration
 
 after_script:
   - docker-compose down -v
+
+after_success:
+  - coveralls
+
+branches:
+  only:
+  - master

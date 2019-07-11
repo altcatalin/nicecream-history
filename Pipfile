@@ -7,6 +7,8 @@ verify_ssl = true
 sqlalchemy-stubs = "*"
 pytest = "==4.6.3"
 pytest-aiohttp = "==0.3.0"
+pytest-cov = "==2.7.1"
+coveralls = "==1.8.1"
 
 [packages]
 aiohttp = "==3.5.4"
@@ -25,6 +27,7 @@ aiohttp-sse = "==2.0.0"
 aiohttp-session = "==2.7.0"
 cryptography = "==2.7"
 aiohttp-jinja2 = "==1.1.1"
+pytest-cov = "==2.7.1"
 
 [requires]
 python_version = "3.7"
