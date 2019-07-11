@@ -54,6 +54,7 @@ services:
       - ./alembic:/usr/src/nicecream-history/alembic
       - ./wait.sh:/wait.sh
       - ./docker-entrypoint.sh:/docker-entrypoint.sh
+      - ./.coverage:/.coverage
     depends_on:
       - postgres
       - redis

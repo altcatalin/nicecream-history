@@ -16,6 +16,8 @@ COPY api ${ROOT}/api
 COPY crawler ${ROOT}/crawler
 COPY alembic ${ROOT}/alembic
 COPY tests ${ROOT}/tests
+COPY pytest.ini ${ROOT}/pytest.ini
+COPY .coveragerc ${ROOT}/.coveragerc
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 
 WORKDIR ${ROOT}

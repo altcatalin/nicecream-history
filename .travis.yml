@@ -13,7 +13,7 @@ before_script:
   - docker-compose run migrations
 
 script:
-  - docker-compose run api pytest --cov tests/integration
+  - docker-compose run api pytest --cov --cov-config=.coveragerc --cov-report=
 
 after_script:
   - docker-compose down -v
