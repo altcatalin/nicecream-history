@@ -13,13 +13,13 @@ before_script:
   - docker-compose run migrations
 
 script:
-  - docker-compose run api pytest --cov --cov-config=.coveragerc --cov-report=
+  - docker-compose run api pytest --cov --cov-config=.coveragerc --cov-report xml
 
 after_script:
   - docker-compose down -v
 
 after_success:
-  - coveralls
+  - coveralls debug
 
 branches:
   only:
