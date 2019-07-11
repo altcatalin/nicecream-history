@@ -267,18 +267,35 @@ aws cloudformation create-stack \
 
 ##### Parameters
 
-Check `.env.sample` and `api/settings.py` for needed parameters.
+Check `.env.sample` and `api/settings.py` for needed parameters.  
+Required parameters for production:  
+- PGHOST (String)
+- PGPORT (String)
+- PGUSER (String)
+- PGPASSWORD (SecureString)
+- PGDATABASE (String)
+- REDIS_HOST (String)
+- REDIS_PORT (String)
+- SPA_URL (String)
+- API_SESSION_COOKIE_SECRET_KEY (SecureString)
+- API_SESSION_COOKIE_DOMAIN (String)
+- API_GOOGLE_CLIENT_ID (String)
+- API_GOOGLE_CLIENT_SECRET (SecureString)
+- API_GOOGLE_REDIRECT_URL (String)
+- API_CSRF_COOKIE_DOMAIN (String)
+- API_CORS_ALLOWED (String)
+- API_CORS_ORIGIN (String)
 
 ```bash
 aws ssm put-parameter \
---name "/[PREFIX]/[PARAMETER_NAME]" \
+--name "/[AWS_SSM_PREFIX]/[PARAMETER_NAME]" \
 --type "String" \
 --value "[PARAMETER_VALUE]"
 ```
 
 ```bash
 aws ssm put-parameter \
---name "/[PREFIX]/[PARAMETER_NAME]" \
+--name "/[AWS_SSM_PREFIX]/[PARAMETER_NAME]" \
 --type "SecureString" \
 --value "[PARAMETER_VALUE]" \
 --key-id [KMS_KEY_ID]
