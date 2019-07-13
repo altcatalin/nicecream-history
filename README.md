@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/altcatalin/nicecream-history.svg?branch=master)](https://travis-ci.org/altcatalin/nicecream-history) [![Coverage Status](https://coveralls.io/repos/github/altcatalin/nicecream-history/badge.svg?branch=master)](https://coveralls.io/github/altcatalin/nicecream-history?branch=master) [![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/altcatalin/nicecream-history/badges/quality-score.png?b=master)](https://scrutinizer-ci.com/g/altcatalin/nicecream-history/?branch=master)
 
-If you like [nicecream.fm](https://nicecream.fm) you will understand the need to save all those songs playing each minute :grin:.  
+If you are a [nicecream.fm](https://nicecream.fm) addict, I got you covered. You can now have all those songs playing each and every minute, even when you are not online :grin:.  
 
 The web app is made of an [API](https://github.com/altcatalin/nicecream-history) and a [SPA](https://github.com/altcatalin/nicecream-history-spa).  
 
