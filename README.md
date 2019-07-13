@@ -6,6 +6,8 @@ If you like [nicecream.fm](https://nicecream.fm) you will understand the need to
 
 The web app is made of an [API](https://github.com/altcatalin/nicecream-history) and a [SPA](https://github.com/altcatalin/nicecream-history-spa).  
 
+Live: [SPA](https://nh.altcatalin.com) - [API](https://nh-api.altcatalin.com)  
+
 **Features**:
 
 - [x] Channels history
