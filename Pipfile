@@ -25,7 +25,7 @@ pyyaml = "==5.1.1"
 aioredis = "==1.2.0"
 aiohttp-sse = "==2.0.0"
 aiohttp-session = "==2.7.0"
-cryptography = "==2.7"
+cryptography = "==3.2"
 aiohttp-jinja2 = "==1.1.1"
 pytest-cov = "==2.7.1"
 
